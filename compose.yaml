@@ -1,0 +1,100 @@
+services:
+  acme-sh:
+    image: neilpang/acme.sh:latest
+    container_name: acme.sh
+    volumes:
+      - ./acme.sh:/acme.sh
+      - ./marzban/cert:/etc/ssl/cert
+    network_mode: host
+    command: daemon
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+  marzban:
+    image: gozargah/marzban:dev
+    container_name: marzban
+    restart: unless-stopped
+    env_file: ./marzban/.env
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+    ports:
+      - 443:443/tcp
+    networks:
+      default:
+        ipv4_address: 172.18.0.2
+    volumes:
+      - ./marzban/templates:/code/templates:ro
+      - ./marzban/core:/usr/local/share/xray
+      - ./marzban/core/xray:/usr/local/bin/xray
+      - ./marzban/db.sqlite3:/code/db.sqlite3
+      - ./marzban/xray_config.json:/code/xray_config.json
+      - ./marzban/cert:/etc/ssl/cert:ro
+
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+    environment:
+       SIGNUPS_ALLOWED: "false"
+       WEB_VAULT_ENABLED: "false"
+       DOMAIN: "https://vw.example.org/"
+    networks:
+      default:
+        ipv4_address: 172.18.0.3
+    volumes:
+      - ./vaultwarden:/data
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+    networks:
+      default:
+        ipv4_address: 172.18.0.4
+    volumes:
+      - ./nginx/error.log:/var/log/nginx/error.log
+      - ./nginx/access.log:/var/log/nginx/access.log
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    command: [nginx-debug, "-g", "daemon off;"]
+
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+    volumes:
+      - ./adguard/conf:/opt/adguardhome/conf
+      - ./adguard/work:/opt/adguardhome/work
+      - ./marzban/cert:/etc/ssl/cert:ro
+    ports:
+        - 853:853/tcp
+    networks:
+      default:
+        ipv4_address: 172.18.0.5
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+      - "traefik.http.routers.adguardhome.entrypoints=insecure"
+      - "traefik.http.routers.adguardhome.rule=Host('https://ad.example.org/')"
+      - "traefik.http.services.adguardhome.loadbalancer.server.port=3000"
+
+networks:
+ default:
+  name: proxy
+  ipam:
+      config:
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1

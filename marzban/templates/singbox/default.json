@@ -126,8 +126,7 @@
                 "outbound": "block"
             },
             {
-                "domain": [ "example.org",
-                    "habr.com" ],
+                "domain": "example.org",
                 "domain_suffix": [
                     ".ru",
                     ".xn--p1ai",
